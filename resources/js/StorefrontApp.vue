@@ -384,11 +384,11 @@ onMounted(() => {
                 </div>
                 <div class="footer-col">
                     <h4>Comunidad</h4>
-                    <a href="https://github.com/nicosResworworworworworworworworwor" target="_blank" rel="noopener noreferrer">GitHub</a>
+                    <a href="https://github.com/goastian" target="_blank" rel="noopener noreferrer">GitHub</a>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>© 2024-{{ new Date().getFullYear() }} Astian Foundation. Midori Marketplace.</p>
+                <p>© 2024-{{ new Date().getFullYear() }} Astian, Inc. Midori Marketplace.</p>
             </div>
         </footer>
     </div>
