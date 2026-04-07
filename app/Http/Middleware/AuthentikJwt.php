@@ -40,12 +40,27 @@ final class AuthentikJwt
                 'name' => $name !== '' ? $name : $email,
                 'email' => $email,
                 'password' => Str::random(64),
+                'role' => $this->resolveRole($claims),
             ],
         );
 
         Auth::setUser($user);
 
         return $next($request);
+    }
+
+    private function resolveRole(array $claims): string
+    {
+        $groups = (array) ($claims['groups'] ?? []);
+        $roleMap = config('authentik-oidc.role_map', []);
+
+        foreach ($roleMap as $group => $role) {
+            if (in_array($group, $groups, true)) {
+                return $role;
+            }
+        }
+
+        return 'user';
     }
 }
 
