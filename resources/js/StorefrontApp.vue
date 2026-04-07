@@ -1,22 +1,27 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t, locale } = useI18n();
 
 const API_BASE = '/api/v1';
 const MIDORI_DOWNLOAD_URL = 'https://astian.org/midori-browser/';
+const LOGIN_URL = '/auth/login';
+const LOGOUT_URL = '/auth/logout';
 
-const typeFilters = [
-    { value: 'all', label: 'Todos' },
-    { value: 'theme', label: 'Themes' },
-    { value: 'wallpaper', label: 'Fondos' },
-    { value: 'widget', label: 'Widgets' },
-    { value: 'animation', label: 'Animaciones' },
-];
+const typeFilters = computed(() => [
+    { value: 'all', label: t('storefront.all') },
+    { value: 'theme', label: t('storefront.themes') },
+    { value: 'wallpaper', label: t('storefront.wallpapers') },
+    { value: 'widget', label: t('storefront.widgets') },
+    { value: 'animation', label: t('storefront.animations') },
+]);
 
-const sortOptions = [
-    { value: 'recommended', label: 'Recomendados' },
-    { value: 'newest', label: 'Mas recientes' },
-    { value: 'name', label: 'Nombre A-Z' },
-];
+const sortOptions = computed(() => [
+    { value: 'recommended', label: t('storefront.sortPopular') },
+    { value: 'newest', label: t('storefront.sortNewest') },
+    { value: 'name', label: t('storefront.sortName') },
+]);
 
 const perPageOptions = [12, 24, 48];
 
@@ -33,6 +38,16 @@ const previewOpen = ref(false);
 const previewItem = ref(null);
 const previewDetail = ref(null);
 const previewLoading = ref(false);
+
+const currentUser = ref(null);
+const isLoggedIn = computed(() => !!currentUser.value);
+
+const otherLocale = computed(() => (locale.value === 'es' ? 'en' : 'es'));
+const localeLabel = computed(() => (locale.value === 'es' ? 'EN' : 'ES'));
+
+function switchLocale() {
+    locale.value = otherLocale.value;
+}
 
 const featured = computed(() => assets.value.slice(0, 1));
 const hasResults = computed(() => assets.value.length > 0);
@@ -64,8 +79,8 @@ function gradientForType(type) {
 }
 
 function typeLabel(type) {
-    const labels = { theme: 'Theme', wallpaper: 'Fondo', widget: 'Widget', animation: 'Animacion', collection: 'Coleccion' };
-    return labels[type] || type;
+    const map = { theme: 'Theme', wallpaper: 'Wallpaper', widget: 'Widget', animation: 'Animation', collection: 'Collection' };
+    return map[type] || type;
 }
 
 function iconForType(type) {
@@ -172,6 +187,11 @@ watch([selectedType, perPage], () => {
 
 onMounted(() => {
     loadCatalog();
+    // Check if user is logged in via session cookie.
+    fetch('/auth/user', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => { if (data?.data) currentUser.value = data.data; })
+        .catch(() => {});
 });
 </script>
 
@@ -188,12 +208,26 @@ onMounted(() => {
                     <a href="/" class="nav-link active">Marketplace</a>
                 </div>
 
-                <a :href="MIDORI_DOWNLOAD_URL" target="_blank" rel="noopener noreferrer" class="btn-download">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path d="M8 1v9m0 0l3-3m-3 3L5 7M2 12v1.5A1.5 1.5 0 003.5 15h9a1.5 1.5 0 001.5-1.5V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    Download Midori
-                </a>
+                <div class="nav-actions">
+                    <!-- Language switcher -->
+                    <button class="btn-lang" @click="switchLocale" :title="otherLocale === 'es' ? 'Cambiar a español' : 'Switch to English'">
+                        🌐 {{ localeLabel }}
+                    </button>
+
+                    <!-- Auth buttons -->
+                    <template v-if="isLoggedIn">
+                        <span class="nav-user-name">{{ currentUser?.name || currentUser?.email }}</span>
+                        <a href="/auth/logout" class="btn-auth btn-logout">{{ t('auth.logout') }}</a>
+                    </template>
+                    <a v-else :href="LOGIN_URL" class="btn-auth btn-login">{{ t('auth.login') }}</a>
+
+                    <a :href="MIDORI_DOWNLOAD_URL" target="_blank" rel="noopener noreferrer" class="btn-download">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 1v9m0 0l3-3m-3 3L5 7M2 12v1.5A1.5 1.5 0 003.5 15h9a1.5 1.5 0 001.5-1.5V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Download Midori
+                    </a>
+                </div>
             </div>
         </nav>
 
@@ -207,7 +241,7 @@ onMounted(() => {
                     <input
                         v-model="search"
                         type="search"
-                        placeholder="Buscar por nombre, tag o autor..."
+                        :placeholder="t('storefront.searchPlaceholder')"
                         @input="onSearchInput"
                     />
                 </div>
@@ -231,14 +265,14 @@ onMounted(() => {
         <!-- ═══ Featured ═══ -->
         <section class="featured-section" v-if="!search.trim() && selectedType === 'all' && featured.length && meta.current_page === 1">
             <div class="featured-inner">
-                <h2 class="section-title">Destacados</h2>
+                <h2 class="section-title">{{ t('storefront.featured') }}</h2>
                 <div class="featured-card" v-for="item in featured" :key="`f-${item.id}`">
                     <div class="featured-thumb" :style="{ background: item.gradient }"></div>
                     <div class="featured-body">
                         <span class="featured-type-badge">{{ typeLabel(item.type) }}</span>
                         <h3>{{ item.name }}</h3>
-                        <p>{{ item.description || 'Contenido destacado para personalizar tu nueva pestaña en Midori.' }}</p>
-                        <button class="btn-explore" @click="openPreview(item)">Ver detalle</button>
+                        <p>{{ item.description || t('storefront.subtitle') }}</p>
+                        <button class="btn-explore" @click="openPreview(item)">{{ t('storefront.preview') }}</button>
                     </div>
                 </div>
             </div>
@@ -250,23 +284,23 @@ onMounted(() => {
                 <!-- Toolbar -->
                 <div class="catalog-toolbar">
                     <p class="showing-label">
-                        Mostrando <strong>{{ rangeLabel }}</strong> de <strong>{{ meta.total }}</strong> items
+                        {{ t('common.showing') }} <strong>{{ rangeLabel }}</strong> / <strong>{{ meta.total }}</strong> {{ t('common.items') }}
                     </p>
                     <div class="toolbar-controls">
                         <label class="toolbar-select">
-                            Por pagina
+                            {{ t('common.perPage') }}
                             <select v-model.number="perPage">
                                 <option v-for="n in perPageOptions" :key="n" :value="n">{{ n }}</option>
                             </select>
                         </label>
                         <label class="toolbar-select">
-                            Tipo
+                            {{ t('common.type') }}
                             <select v-model="selectedType">
                                 <option v-for="f in typeFilters" :key="f.value" :value="f.value">{{ f.label }}</option>
                             </select>
                         </label>
                         <label class="toolbar-select">
-                            Ordenar
+                            {{ t('common.sortBy') }}
                             <select v-model="selectedSort">
                                 <option v-for="s in sortOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
                             </select>
@@ -275,9 +309,9 @@ onMounted(() => {
                 </div>
 
                 <!-- States -->
-                <p v-if="loading" class="state-msg">Cargando catalogo...</p>
+                <p v-if="loading" class="state-msg">{{ t('common.loading') }}</p>
                 <p v-else-if="error" class="state-msg error-msg">{{ error }}</p>
-                <p v-else-if="!hasResults" class="state-msg">No se encontraron resultados. Prueba con otro filtro o busqueda.</p>
+                <p v-else-if="!hasResults" class="state-msg">{{ t('storefront.noExtensions') }}</p>
 
                 <!-- Grid -->
                 <div v-if="!loading && hasResults" class="grid">
@@ -293,7 +327,7 @@ onMounted(() => {
                             </div>
                         </div>
                         <h3 class="card-name">{{ item.name }}</h3>
-                        <p class="card-author">Por {{ item.author }}</p>
+                        <p class="card-author">{{ t('storefront.by') }} {{ item.author }}</p>
                         <div class="card-badges">
                             <span class="badge type-badge">{{ typeLabel(item.type) }}</span>
                             <span v-for="tag in item.tags.slice(0, 1)" :key="tag" class="badge tag-badge">{{ tag }}</span>
@@ -304,11 +338,11 @@ onMounted(() => {
                 <!-- Pagination -->
                 <div v-if="meta.last_page > 1 && !loading" class="pagination">
                     <button :disabled="meta.current_page <= 1" @click="changePage(meta.current_page - 1)">
-                        ← Anterior
+                        ← {{ t('common.previous') }}
                     </button>
-                    <span class="page-info">Pagina {{ meta.current_page }} de {{ meta.last_page }}</span>
+                    <span class="page-info">{{ t('common.page') }} {{ meta.current_page }} {{ t('common.of') }} {{ meta.last_page }}</span>
                     <button :disabled="meta.current_page >= meta.last_page" @click="changePage(meta.current_page + 1)">
-                        Siguiente →
+                        {{ t('common.next') }} →
                     </button>
                 </div>
             </div>
@@ -318,7 +352,7 @@ onMounted(() => {
         <Teleport to="body">
             <div v-if="previewOpen && previewItem" class="modal-overlay" @click.self="closePreview">
                 <div class="modal-panel">
-                    <button class="modal-close" @click="closePreview" aria-label="Cerrar">✕</button>
+                    <button class="modal-close" @click="closePreview" :aria-label="t('common.close')">✕</button>
 
                     <div class="modal-banner" :style="{ background: previewItem.gradient }">
                         <div class="modal-banner-icon">{{ iconForType(previewItem.type) }}</div>
@@ -327,17 +361,17 @@ onMounted(() => {
                     <div class="modal-body">
                         <span class="badge type-badge">{{ typeLabel(previewItem.type) }}</span>
                         <h2>{{ previewItem.name }}</h2>
-                        <p class="modal-author">Por {{ previewItem.author }}</p>
+                        <p class="modal-author">{{ t('storefront.by') }} {{ previewItem.author }}</p>
 
-                        <div v-if="previewLoading" class="modal-loading">Cargando detalle...</div>
+                        <div v-if="previewLoading" class="modal-loading">{{ t('common.loading') }}</div>
                         <template v-else>
                             <p class="modal-desc">
-                                {{ previewDetail?.description || previewItem.description || 'Sin descripcion disponible.' }}
+                                {{ previewDetail?.description || previewItem.description || t('storefront.subtitle') }}
                             </p>
 
                             <div class="modal-info-grid">
                                 <div v-if="previewItem.version" class="info-item">
-                                    <span class="info-label">Version</span>
+                                    <span class="info-label">{{ t('storefront.version') }}</span>
                                     <span>{{ previewItem.version }}</span>
                                 </div>
                                 <div v-if="previewItem.browsers.length" class="info-item">
@@ -347,7 +381,7 @@ onMounted(() => {
                                     </div>
                                 </div>
                                 <div v-if="previewItem.tags.length" class="info-item">
-                                    <span class="info-label">Tags</span>
+                                    <span class="info-label">{{ t('storefront.tags') }}</span>
                                     <div class="card-badges">
                                         <span v-for="tag in previewItem.tags" :key="tag" class="badge tag-badge">{{ tag }}</span>
                                     </div>
@@ -361,9 +395,9 @@ onMounted(() => {
 
                         <div class="modal-actions">
                             <button class="btn-install" @click="installAsset(previewItem)">
-                                Agregar a Midori
+                                {{ t('storefront.install') }}
                             </button>
-                            <button class="btn-secondary" @click="closePreview">Cerrar</button>
+                            <button class="btn-secondary" @click="closePreview">{{ t('common.close') }}</button>
                         </div>
                     </div>
                 </div>
@@ -374,16 +408,20 @@ onMounted(() => {
         <footer class="site-footer">
             <div class="footer-inner">
                 <div class="footer-col">
-                    <h4>Producto</h4>
+                    <h4>{{ t('storefront.title') }}</h4>
                     <a :href="MIDORI_DOWNLOAD_URL" target="_blank" rel="noopener noreferrer">Download Midori</a>
                     <a href="/">Marketplace</a>
                 </div>
                 <div class="footer-col">
-                    <h4>Recursos</h4>
+                    <h4>{{ t('storefront.docs') }}</h4>
+                    <a :href="'/' + locale + '/docs'">{{ t('storefront.docs') }}</a>
+                </div>
+                <div class="footer-col">
+                    <h4>{{ t('storefront.all') }}</h4>
                     <a href="https://astian.org" target="_blank" rel="noopener noreferrer">Astian</a>
                 </div>
                 <div class="footer-col">
-                    <h4>Comunidad</h4>
+                    <h4>GitHub</h4>
                     <a href="https://github.com/goastian" target="_blank" rel="noopener noreferrer">GitHub</a>
                 </div>
             </div>
@@ -473,6 +511,72 @@ onMounted(() => {
 .nav-link:hover,
 .nav-link.active {
     color: #111827;
+}
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.btn-lang {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid #e5e7eb;
+    background: transparent;
+    padding: 0.35rem 0.7rem;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-lang:hover {
+    border-color: #16a34a;
+    color: #16a34a;
+}
+
+.nav-user-name {
+    font-size: 0.82rem;
+    color: #6b7280;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-auth {
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: 8px;
+    transition: all 0.15s;
+}
+
+.btn-login {
+    background: #16a34a;
+    color: #fff;
+}
+
+.btn-login:hover {
+    background: #15803d;
+}
+
+.btn-logout {
+    border: 1px solid #e5e7eb;
+    color: #6b7280;
+    background: transparent;
+}
+
+.btn-logout:hover {
+    border-color: #d1d5db;
+    color: #374151;
 }
 
 .btn-download {
@@ -1020,7 +1124,7 @@ onMounted(() => {
     margin: 0 auto;
     padding: 2rem 1.5rem;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 2rem;
 }
 
