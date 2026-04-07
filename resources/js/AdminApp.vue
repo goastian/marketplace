@@ -1,5 +1,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t, locale } = useI18n();
 
 const API_BASE = '/api/v1';
 const STORAGE_KEY = 'midori_admin_token';
@@ -69,7 +72,14 @@ async function apiFetch(path, opts = {}) {
 }
 
 function statusLabel(s) {
-    return s === 'published' ? 'Publicado' : s === 'draft' ? 'Borrador' : s;
+    return s === 'published' ? t('admin.published') : s === 'draft' ? t('admin.drafts') : s;
+}
+
+const otherLocale = computed(() => (locale.value === 'es' ? 'en' : 'es'));
+const localeLabel = computed(() => (locale.value === 'es' ? 'EN' : 'ES'));
+
+function switchLocale() {
+    locale.value = otherLocale.value;
 }
 
 function formatDate(d) {
@@ -264,12 +274,13 @@ onMounted(() => {
             <div class="admin-topbar-inner">
                 <a href="/" class="admin-logo">
                     <span class="admin-logo-icon">M</span>
-                    <span>Admin · Midori Marketplace</span>
+                    <span>{{ t('admin.title') }} · Midori Marketplace</span>
                 </a>
                 <div class="admin-topbar-right">
+                    <button class="btn-lang-dark" @click="switchLocale">🌐 {{ localeLabel }}</button>
                     <template v-if="isAuthenticated">
                         <span class="admin-user">{{ user?.email }}</span>
-                        <button class="btn-sm btn-outline" @click="logout">Salir</button>
+                        <button class="btn-sm btn-outline" @click="logout">{{ t('auth.logout') }}</button>
                     </template>
                 </div>
             </div>
@@ -280,9 +291,9 @@ onMounted(() => {
             <section v-if="!isAuthenticated" class="auth-gate">
                 <div class="gate-card">
                     <div class="gate-icon">🔒</div>
-                    <h1>Panel de administracion</h1>
+                    <h1>{{ t('admin.title') }}</h1>
                     <p>
-                        Ingresa tu Bearer token JWT de Authentik para gestionar assets, versiones y publicaciones.
+                        {{ t('admin.dashboard') }} — Authentik JWT
                     </p>
                     <label>
                         <span>Token</span>
@@ -293,7 +304,7 @@ onMounted(() => {
                         ></textarea>
                     </label>
                     <button class="btn-primary" :disabled="loading" @click="authenticate">
-                        {{ loading ? 'Validando...' : 'Iniciar sesion' }}
+                        {{ loading ? t('common.loading') : t('auth.login') }}
                     </button>
                     <p v-if="error" class="alert-error">{{ error }}</p>
                 </div>
@@ -306,7 +317,7 @@ onMounted(() => {
 
                 <section class="metrics-row">
                     <article v-for="(val, key) in counters" :key="key" class="metric-card">
-                        <span class="metric-label">{{ key === 'total' ? 'Total' : key === 'published' ? 'Publicados' : key === 'draft' ? 'Borradores' : 'Versiones' }}</span>
+                        <span class="metric-label">{{ key === 'total' ? t('admin.totalAssets') : key === 'published' ? t('admin.published') : key === 'draft' ? t('admin.drafts') : t('admin.uploadVersion') }}</span>
                         <strong>{{ val }}</strong>
                     </article>
                 </section>
@@ -314,7 +325,7 @@ onMounted(() => {
                 <div class="admin-columns">
                     <!-- Asset form -->
                     <form class="admin-panel" @submit.prevent="saveAsset">
-                        <h2>{{ form.id ? 'Editar asset' : 'Nuevo asset' }}</h2>
+                        <h2>{{ form.id ? t('admin.editAsset') : t('admin.createAsset') }}</h2>
                         <div class="form-row">
                             <label><span>Tipo</span>
                                 <select v-model="form.type"><option v-for="t in assetTypes" :key="t" :value="t">{{ t }}</option></select>
@@ -332,14 +343,14 @@ onMounted(() => {
                         </div>
                         <label><span>Tags</span><input v-model="form.tags" placeholder="dark, futuristic" /></label>
                         <div class="form-actions">
-                            <button type="submit" class="btn-primary" :disabled="actionLoading">Guardar</button>
-                            <button type="button" class="btn-outline" @click="resetForm">Limpiar</button>
+                            <button type="submit" class="btn-primary" :disabled="actionLoading">{{ t('common.save') }}</button>
+                            <button type="button" class="btn-outline" @click="resetForm">{{ t('common.delete') }}</button>
                         </div>
                     </form>
 
                     <!-- Version form -->
                     <form class="admin-panel" @submit.prevent="submitVersion">
-                        <h2>Subir version</h2>
+                        <h2>{{ t('admin.uploadVersion') }}</h2>
                         <label><span>Asset</span>
                             <select v-model="versionForm.assetId">
                                 <option value="">Selecciona...</option>
@@ -359,25 +370,25 @@ onMounted(() => {
                         <label><span>Manifest JSON</span><textarea v-model="versionForm.manifest" rows="5"></textarea></label>
                         <label><span>Paquete</span><input type="file" accept=".zip,.json,.tar,.gz" @change="onFileChange" /></label>
                         <div class="form-actions">
-                            <button type="submit" class="btn-primary" :disabled="actionLoading">Subir</button>
-                            <button type="button" class="btn-outline" @click="resetVersionForm">Limpiar</button>
+                            <button type="submit" class="btn-primary" :disabled="actionLoading">{{ t('admin.uploadVersion') }}</button>
+                            <button type="button" class="btn-outline" @click="resetVersionForm">{{ t('common.cancel') }}</button>
                         </div>
                     </form>
                 </div>
 
                 <!-- Table -->
                 <section class="admin-panel table-section">
-                    <h2>Assets gestionados</h2>
+                    <h2>{{ t('admin.assets') }}</h2>
                     <div class="table-scroll" v-if="assets.length">
                         <table>
                             <thead>
                                 <tr>
                                     <th>Asset</th>
-                                    <th>Tipo</th>
-                                    <th>Estado</th>
-                                    <th>Versiones</th>
-                                    <th>Actualizado</th>
-                                    <th>Acciones</th>
+                                    <th>{{ t('admin.assets') }}</th>
+                                    <th>Status</th>
+                                    <th>Versions</th>
+                                    <th>Updated</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -388,15 +399,15 @@ onMounted(() => {
                                     <td>{{ a.versions.length }}</td>
                                     <td>{{ formatDate(a.updated_at) }}</td>
                                     <td class="actions-cell">
-                                        <button class="btn-link" @click="editAsset(a)">Editar</button>
-                                        <button class="btn-link" @click="toggleStatus(a)">{{ a.status === 'published' ? 'Despublicar' : 'Publicar' }}</button>
-                                        <button class="btn-link" @click="versionForm.assetId = String(a.id)">Versionar</button>
+                                        <button class="btn-link" @click="editAsset(a)">{{ t('common.edit') }}</button>
+                                        <button class="btn-link" @click="toggleStatus(a)">{{ a.status === 'published' ? t('admin.drafts') : t('admin.published') }}</button>
+                                        <button class="btn-link" @click="versionForm.assetId = String(a.id)">{{ t('admin.uploadVersion') }}</button>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <p v-else class="empty">No hay assets registrados.</p>
+                    <p v-else class="empty">{{ t('common.noResults') }}</p>
                 </section>
             </template>
         </main>
@@ -471,6 +482,27 @@ onMounted(() => {
 .admin-user {
     font-size: 0.82rem;
     color: #94a3b8;
+}
+
+.btn-lang-dark {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid #334155;
+    background: transparent;
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-lang-dark:hover {
+    border-color: #16a34a;
+    color: #4ade80;
 }
 
 /* Auth gate */
