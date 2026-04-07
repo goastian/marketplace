@@ -27,6 +27,7 @@ final class ApiV1CatalogAndAssetsTest extends TestCase
             'license' => 'MIT',
             'tags' => ['space', 'dark'],
             'status' => 'published',
+            'approval_status' => 'approved',
             'published_at' => now(),
         ]);
 
@@ -86,6 +87,7 @@ final class ApiV1CatalogAndAssetsTest extends TestCase
             'slug' => 'aurora-wallpaper',
             'name' => 'Aurora Wallpaper',
             'status' => 'published',
+            'approval_status' => 'approved',
             'published_at' => now(),
         ]);
 
@@ -177,11 +179,8 @@ final class ApiV1CatalogAndAssetsTest extends TestCase
             ->assertJsonPath('data.0.slug', 'mint-theme')
             ->assertJsonPath('data.0.versions.0.version', '1.0.0');
 
-        $publicDetail = $this->getJson('/api/v1/assets/mint-theme');
-
-        $publicDetail
-            ->assertStatus(200)
-            ->assertJsonPath('data.versions.0.version', '1.0.0');
+        // Asset is not publicly visible until admin approves it.
+        $this->getJson('/api/v1/assets/mint-theme')->assertStatus(404);
     }
 
     private array $jwksPayload = [];
