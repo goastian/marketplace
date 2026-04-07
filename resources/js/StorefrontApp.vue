@@ -49,6 +49,20 @@ function switchLocale() {
     locale.value = otherLocale.value;
 }
 
+async function logout() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = LOGOUT_URL;
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = '_token';
+    input.value = csrfToken || '';
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+}
+
 const featured = computed(() => assets.value.slice(0, 1));
 const hasResults = computed(() => assets.value.length > 0);
 
@@ -217,7 +231,7 @@ onMounted(() => {
                     <!-- Auth buttons -->
                     <template v-if="isLoggedIn">
                         <span class="nav-user-name">{{ currentUser?.name || currentUser?.email }}</span>
-                        <a href="/auth/logout" class="btn-auth btn-logout">{{ t('auth.logout') }}</a>
+                        <button class="btn-auth btn-logout" @click="logout">{{ t('auth.logout') }}</button>
                     </template>
                     <a v-else :href="LOGIN_URL" class="btn-auth btn-login">{{ t('auth.login') }}</a>
 

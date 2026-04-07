@@ -20,7 +20,7 @@ return [
     | First match wins. Users not matching any group get 'user'.
     */
     'role_map' => [
-        'marketplace-admins' => 'admin',
+        'authentik Admins' => 'admin',
         'marketplace-developers' => 'developer',
     ],
 ];
