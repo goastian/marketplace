@@ -14,6 +14,11 @@ final class AuthentikJwt
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // If user is already authenticated via web session, allow through.
+        if (Auth::check()) {
+            return $next($request);
+        }
+
         $token = $request->bearerToken();
 
         if (! is_string($token) || $token === '') {

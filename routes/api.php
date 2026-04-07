@@ -17,8 +17,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/assets/{asset:slug}/reviews', [\App\Http\Controllers\Api\V1\ReviewController::class, 'index']);
     });
 
-    // Authenticated user routes.
-    Route::middleware(['authentik.jwt', 'throttle:api-authenticated'])->group(function () {
+    // Authenticated user routes (Bearer JWT or web session).
+    Route::middleware(['web', 'authentik.jwt', 'throttle:api-authenticated'])->group(function () {
         Route::get('/me', [\App\Http\Controllers\Api\V1\MeController::class, 'show']);
         Route::get('/me/preferences', [\App\Http\Controllers\Api\V1\PreferencesController::class, 'show']);
         Route::put('/me/preferences', [\App\Http\Controllers\Api\V1\PreferencesController::class, 'upsert']);
@@ -38,8 +38,8 @@ Route::prefix('v1')->group(function () {
         Route::delete('/me/reviews/{review}', [\App\Http\Controllers\Api\V1\ReviewController::class, 'destroy']);
     });
 
-    // Admin routes.
-    Route::middleware(['authentik.jwt', 'role:admin', 'throttle:api-authenticated'])->prefix('admin')->group(function () {
+    // Admin routes (Bearer JWT or web session).
+    Route::middleware(['web', 'authentik.jwt', 'role:admin', 'throttle:api-authenticated'])->prefix('admin')->group(function () {
         Route::get('/stats', [\App\Http\Controllers\Api\V1\AdminController::class, 'stats']);
         Route::get('/assets', [\App\Http\Controllers\Api\V1\AdminController::class, 'index']);
         Route::get('/assets/{asset}', [\App\Http\Controllers\Api\V1\AdminController::class, 'show']);

@@ -5,14 +5,12 @@ import { useI18n } from 'vue-i18n';
 const { t, locale } = useI18n();
 
 const API_BASE = '/api/v1';
-const STORAGE_KEY = 'midori_admin_token';
 
 const loading = ref(false);
 const error = ref('');
 const message = ref('');
 const actionLoading = ref(false);
 
-const token = ref(localStorage.getItem(STORAGE_KEY) || '');
 const user = ref(null);
 const assets = ref([]);
 
@@ -54,13 +52,15 @@ const counters = computed(() => {
 });
 
 function authHeaders() {
-    return { Authorization: `Bearer ${token.value.trim()}` };
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    return csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {};
 }
 
 async function apiFetch(path, opts = {}) {
     const res = await fetch(`${API_BASE}${path}`, {
         ...opts,
-        headers: { Accept: 'application/json', ...(opts.headers || {}) },
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', ...authHeaders(), ...(opts.headers || {}) },
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -88,36 +88,36 @@ function formatDate(d) {
 }
 
 async function authenticate() {
-    if (!token.value.trim()) {
-        error.value = 'Ingresa un Bearer token valido emitido por Authentik.';
-        return;
-    }
     loading.value = true;
     error.value = '';
     try {
-        localStorage.setItem(STORAGE_KEY, token.value.trim());
-        const me = await apiFetch('/me', { headers: authHeaders() });
+        const me = await apiFetch('/me');
         user.value = me.data;
         await loadAssets();
     } catch {
         user.value = null;
-        error.value = 'Token invalido o expirado.';
-        localStorage.removeItem(STORAGE_KEY);
+        error.value = 'Session expired. Please log in again.';
     } finally {
         loading.value = false;
     }
 }
 
 function logout() {
-    token.value = '';
-    user.value = null;
-    assets.value = [];
-    localStorage.removeItem(STORAGE_KEY);
-    message.value = 'Sesion cerrada.';
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/auth/logout';
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = '_token';
+    input.value = csrfToken || '';
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
 }
 
 async function loadAssets() {
-    const payload = await apiFetch('/me/assets', { headers: authHeaders() });
+    const payload = await apiFetch('/me/assets');
     assets.value = (payload.data || []).map((a) => ({
         ...a,
         tags: Array.isArray(a.tags) ? a.tags : [],
@@ -187,7 +187,7 @@ async function saveAsset() {
 
         await apiFetch(path, {
             method,
-            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
 
@@ -229,7 +229,6 @@ async function submitVersion() {
 
         await apiFetch(`/me/assets/${versionForm.assetId}/versions`, {
             method: 'POST',
-            headers: authHeaders(),
             body: fd,
         });
 
@@ -251,7 +250,7 @@ async function toggleStatus(a) {
         const next = a.status === 'published' ? 'draft' : 'published';
         await apiFetch(`/me/assets/${a.id}`, {
             method: 'PUT',
-            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: next }),
         });
         await loadAssets();
@@ -264,7 +263,7 @@ async function toggleStatus(a) {
 }
 
 onMounted(() => {
-    if (token.value.trim()) authenticate();
+    authenticate();
 });
 </script>
 
@@ -292,21 +291,9 @@ onMounted(() => {
                 <div class="gate-card">
                     <div class="gate-icon">🔒</div>
                     <h1>{{ t('admin.title') }}</h1>
-                    <p>
-                        {{ t('admin.dashboard') }} — Authentik JWT
-                    </p>
-                    <label>
-                        <span>Token</span>
-                        <textarea
-                            v-model="token"
-                            rows="4"
-                            placeholder="eyJhbGciOiJSUzI1NiIs..."
-                        ></textarea>
-                    </label>
-                    <button class="btn-primary" :disabled="loading" @click="authenticate">
-                        {{ loading ? t('common.loading') : t('auth.login') }}
-                    </button>
-                    <p v-if="error" class="alert-error">{{ error }}</p>
+                    <p v-if="loading">{{ t('common.loading') }}</p>
+                    <p v-else-if="error" class="alert-error">{{ error }}</p>
+                    <p v-else>{{ t('common.loading') }}</p>
                 </div>
             </section>
 
