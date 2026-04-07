@@ -18,6 +18,7 @@ final class CatalogController extends Controller
     {
         $query = Asset::query()
             ->where('status', 'published')
+            ->where('approval_status', 'approved')
             ->orderByDesc('published_at')
             ->orderByDesc('id');
 
@@ -69,7 +70,7 @@ final class CatalogController extends Controller
 
     public function show(Asset $asset): JsonResponse
     {
-        if ($asset->status !== 'published') {
+        if ($asset->status !== 'published' || $asset->approval_status !== 'approved') {
             abort(404);
         }
 

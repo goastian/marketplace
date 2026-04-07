@@ -3,8 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ScanExtensionJob;
 use App\Models\Asset;
+use App\Models\AssetSubmission;
 use App\Models\AssetVersion;
+use App\Services\InputSanitizationException;
+use App\Services\InputSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -13,6 +17,9 @@ use Illuminate\Support\Str;
 
 final class ManagedAssetController extends Controller
 {
+    public function __construct(
+        private readonly InputSanitizer $sanitizer,
+    ) {}
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -53,13 +60,23 @@ final class ManagedAssetController extends Controller
             'type' => ['required', 'string', 'in:wallpaper,theme,widget,animation,collection,midori-update'],
             'slug' => ['required', 'string', 'max:180', 'alpha_dash', 'unique:assets,slug'],
             'name' => ['required', 'string', 'max:180'],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:5000'],
             'author' => ['nullable', 'string', 'max:180'],
             'license' => ['nullable', 'string', 'max:128'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:50'],
             'status' => ['nullable', 'string', 'in:draft,published'],
         ]);
+
+        try {
+            $validated = $this->sanitizer->sanitizeFields($validated, [
+                'name' => 180,
+                'description' => 5000,
+                'author' => 180,
+            ]);
+        } catch (InputSanitizationException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         $status = $validated['status'] ?? 'draft';
 
@@ -73,8 +90,18 @@ final class ManagedAssetController extends Controller
             'license' => $validated['license'] ?? null,
             'tags' => $validated['tags'] ?? [],
             'status' => $status,
+            'approval_status' => 'pending',
             'published_at' => $status === 'published' ? now() : null,
         ]);
+
+        if ($status === 'published') {
+            AssetSubmission::query()->create([
+                'asset_id' => $asset->id,
+                'submitted_by' => $user->id,
+                'status' => 'pending',
+                'submitted_at' => now(),
+            ]);
+        }
 
         return response()->json([
             'data' => $this->transformManagedAsset($asset),
@@ -89,7 +116,7 @@ final class ManagedAssetController extends Controller
             'type' => ['sometimes', 'string', 'in:wallpaper,theme,widget,animation,collection,midori-update'],
             'slug' => ['sometimes', 'string', 'max:180', 'alpha_dash', 'unique:assets,slug,'.$asset->id],
             'name' => ['sometimes', 'string', 'max:180'],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:5000'],
             'author' => ['nullable', 'string', 'max:180'],
             'license' => ['nullable', 'string', 'max:128'],
             'tags' => ['nullable', 'array'],
@@ -97,10 +124,31 @@ final class ManagedAssetController extends Controller
             'status' => ['sometimes', 'string', 'in:draft,published'],
         ]);
 
+        try {
+            $validated = $this->sanitizer->sanitizeFields($validated, [
+                'name' => 180,
+                'description' => 5000,
+                'author' => 180,
+            ]);
+        } catch (InputSanitizationException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         if (array_key_exists('status', $validated)) {
             $validated['published_at'] = $validated['status'] === 'published'
                 ? ($asset->published_at ?? now())
                 : null;
+
+            if ($validated['status'] === 'published' && $asset->status !== 'published') {
+                $validated['approval_status'] = 'pending';
+
+                AssetSubmission::query()->create([
+                    'asset_id' => $asset->id,
+                    'submitted_by' => $request->user()->id,
+                    'status' => 'pending',
+                    'submitted_at' => now(),
+                ]);
+            }
         }
 
         $asset->fill($validated);
@@ -152,9 +200,12 @@ final class ManagedAssetController extends Controller
                 'file_path' => $filePath,
                 'checksum' => $checksum,
                 'size_bytes' => $sizeBytes,
+                'scan_status' => 'pending',
                 'published_at' => $status === 'published' ? now() : null,
             ],
         );
+
+        ScanExtensionJob::dispatch($version->id);
 
         return response()->json([
             'data' => $this->transformVersion($version),

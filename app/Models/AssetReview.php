@@ -8,34 +8,28 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'asset_id',
-    'version',
+    'user_id',
+    'rating',
+    'title',
+    'body',
     'status',
-    'min_app_version',
-    'max_app_version',
-    'browsers',
-    'manifest',
-    'file_disk',
-    'file_path',
-    'checksum',
-    'size_bytes',
-    'scan_status',
-    'scan_notes',
-    'published_at',
 ])]
-class AssetVersion extends Model
+class AssetReview extends Model
 {
     protected function casts(): array
     {
         return [
-            'browsers' => 'array',
-            'manifest' => 'array',
-            'size_bytes' => 'integer',
-            'published_at' => 'datetime',
+            'rating' => 'integer',
         ];
     }
 
     public function asset(): BelongsTo
     {
         return $this->belongsTo(Asset::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['auth_sub', 'name', 'email', 'password'])]
+#[Fillable(['auth_sub', 'name', 'email', 'password', 'role'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -39,5 +39,20 @@ class User extends Authenticatable
     public function collections(): HasMany
     {
         return $this->hasMany(UserCollection::class);
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(AssetReview::class);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isDeveloper(): bool
+    {
+        return in_array($this->role, ['developer', 'admin'], true);
     }
 }

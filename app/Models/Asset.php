@@ -17,6 +17,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'license',
     'tags',
     'status',
+    'is_official',
+    'approval_status',
     'published_at',
 ])]
 class Asset extends Model
@@ -25,6 +27,7 @@ class Asset extends Model
     {
         return [
             'tags' => 'array',
+            'is_official' => 'boolean',
             'published_at' => 'datetime',
         ];
     }
@@ -45,5 +48,15 @@ class Asset extends Model
             ->where('status', 'published')
             ->orderByDesc('published_at')
             ->orderByDesc('id');
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(AssetReview::class);
+    }
+
+    public function submissions(): HasMany
+    {
+        return $this->hasMany(AssetSubmission::class);
     }
 }
