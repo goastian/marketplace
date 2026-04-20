@@ -16,4 +16,28 @@ class ExampleTest extends TestCase
 
         $response->assertStatus(200);
     }
+
+    public function test_admin_shell_is_publicly_rendered_without_redirecting_to_login(): void
+    {
+        $response = $this->get('/admin');
+
+        $response
+            ->assertStatus(200)
+            ->assertSee('data-surface="admin"', false);
+    }
+
+    public function test_login_route_persists_safe_next_destination(): void
+    {
+        $response = $this->get('/auth/login?next=/admin');
+
+        $response->assertRedirect();
+        $this->assertSame('/admin', session('url.intended'));
+    }
+
+    public function test_login_route_ignores_unsafe_next_destination(): void
+    {
+        $this->get('/auth/login?next=https://evil.example.test')->assertRedirect();
+
+        $this->assertNull(session('url.intended'));
+    }
 }
