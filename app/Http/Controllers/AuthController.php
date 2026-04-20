@@ -17,6 +17,11 @@ final class AuthController extends Controller
         $state = Str::random(40);
         $request->session()->put('oidc_state', $state);
 
+        $next = $request->query('next');
+        if (is_string($next) && str_starts_with($next, '/') && ! str_starts_with($next, '//')) {
+            $request->session()->put('url.intended', $next);
+        }
+
         $query = http_build_query([
             'client_id' => config('authentik-oidc.client_id'),
             'redirect_uri' => url(config('authentik-oidc.redirect_uri')),

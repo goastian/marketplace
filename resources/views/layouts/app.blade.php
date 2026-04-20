@@ -15,7 +15,7 @@
     <meta property="og:url" content="{{ url()->current() }}">
     @hasSection('og_image')
         <meta property="og:image" content="@yield('og_image')">
-    @endif
+    @endhasSection
 
     {{-- Twitter Card --}}
     <meta name="twitter:card" content="summary_large_image">

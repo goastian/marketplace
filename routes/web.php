@@ -36,7 +36,7 @@ Route::get('/auth/user', function (\Illuminate\Http\Request $request) {
 
 Route::get('/admin', function () {
     return view('marketplace', ['surface' => 'admin']);
-})->middleware(['auth', 'role:admin']);
+});
 
 // Localized routes for SEO.
 Route::prefix('{locale?}')

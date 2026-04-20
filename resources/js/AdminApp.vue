@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 const { t, locale } = useI18n();
 
 const API_BASE = '/api/v1';
+const LOGIN_URL = '/auth/login?next=/admin';
 
 const loading = ref(false);
 const error = ref('');
@@ -114,6 +115,10 @@ function logout() {
     form.appendChild(input);
     document.body.appendChild(form);
     form.submit();
+}
+
+function startLogin() {
+    window.top.location.href = LOGIN_URL;
 }
 
 async function loadAssets() {
@@ -293,7 +298,10 @@ onMounted(() => {
                     <h1>{{ t('admin.title') }}</h1>
                     <p v-if="loading">{{ t('common.loading') }}</p>
                     <p v-else-if="error" class="alert-error">{{ error }}</p>
-                    <p v-else>{{ t('common.loading') }}</p>
+                    <p v-else>Inicia sesion con Authentik para cargar el panel administrativo.</p>
+                    <button v-if="!loading" type="button" class="btn-primary gate-login" @click="startLogin">
+                        Iniciar sesion
+                    </button>
                 </div>
             </section>
 
@@ -589,6 +597,10 @@ input:focus, select:focus, textarea:focus {
 
 .btn-primary:hover { opacity: 0.92; }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.gate-login {
+    min-width: 180px;
+}
 
 .btn-outline, .btn-sm {
     border: 1px solid #cbd5e1;
