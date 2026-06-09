@@ -12,11 +12,17 @@ final class MeController extends Controller
     {
         $user = $request->user();
 
-        return response()->json([
+        $payload = [
             'id' => $user?->id,
             'sub' => $user?->auth_sub,
             'email' => $user?->email,
             'name' => $user?->name,
+        ];
+
+        return response()->json([
+            // Keep legacy top-level keys and expose data for SPA parity.
+            ...$payload,
+            'data' => $payload,
         ]);
     }
 }

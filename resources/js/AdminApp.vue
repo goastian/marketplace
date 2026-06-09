@@ -58,11 +58,27 @@ function authHeaders() {
 }
 
 async function apiFetch(path, opts = {}) {
-    const res = await fetch(`${API_BASE}${path}`, {
-        ...opts,
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json', ...authHeaders(), ...(opts.headers || {}) },
-    });
+    const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 12000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    let res;
+    try {
+        res = await fetch(`${API_BASE}${path}`, {
+            ...opts,
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json', ...authHeaders(), ...(opts.headers || {}) },
+            signal: controller.signal,
+        });
+    } catch (err) {
+        if (err?.name === 'AbortError') {
+            throw new Error('Tiempo de espera agotado al conectar con el servidor.');
+        }
+        throw err;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
         const err = new Error(body?.message || `Error ${res.status}`);
@@ -92,12 +108,18 @@ async function authenticate() {
     loading.value = true;
     error.value = '';
     try {
-        const me = await apiFetch('/me');
-        user.value = me.data;
+        const me = await apiFetch('/me', { timeoutMs: 15000 });
+        const currentUser = me?.data ?? me;
+
+        if (!currentUser?.id) {
+            throw new Error('Sesion no valida. Inicia sesion nuevamente.');
+        }
+
+        user.value = currentUser;
         await loadAssets();
-    } catch {
+    } catch (e) {
         user.value = null;
-        error.value = 'Session expired. Please log in again.';
+        error.value = e?.message || 'Sesion expirada. Inicia sesion nuevamente.';
     } finally {
         loading.value = false;
     }
