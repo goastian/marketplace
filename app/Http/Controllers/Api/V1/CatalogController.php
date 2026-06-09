@@ -8,6 +8,7 @@ use App\Models\AssetVersion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,9 +19,12 @@ final class CatalogController extends Controller
     {
         $query = Asset::query()
             ->where('status', 'published')
-            ->where('approval_status', 'approved')
             ->orderByDesc('published_at')
             ->orderByDesc('id');
+
+        if ($this->hasApprovalStatusColumn()) {
+            $query->where('approval_status', 'approved');
+        }
 
         $type = $request->query('type');
 
@@ -70,7 +74,11 @@ final class CatalogController extends Controller
 
     public function show(Asset $asset): JsonResponse
     {
-        if ($asset->status !== 'published' || $asset->approval_status !== 'approved') {
+        if ($asset->status !== 'published') {
+            abort(404);
+        }
+
+        if ($this->hasApprovalStatusColumn() && $asset->approval_status !== 'approved') {
             abort(404);
         }
 
@@ -200,5 +208,18 @@ final class CatalogController extends Controller
             'size_bytes' => $version->size_bytes,
             'published_at' => $version->published_at?->toISOString(),
         ];
+    }
+
+    private function hasApprovalStatusColumn(): bool
+    {
+        static $cached = null;
+
+        if (is_bool($cached)) {
+            return $cached;
+        }
+
+        $cached = Schema::hasColumn('assets', 'approval_status');
+
+        return $cached;
     }
 }

@@ -15,7 +15,7 @@
     <meta property="og:url" content="{{ url()->current() }}">
     @hasSection('og_image')
         <meta property="og:image" content="@yield('og_image')">
-    @endhasSection
+    @endif
 
     {{-- Twitter Card --}}
     <meta name="twitter:card" content="summary_large_image">
@@ -51,8 +51,6 @@
     @endif
 
     {{-- Preconnect --}}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 

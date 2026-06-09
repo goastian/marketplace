@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Asset;
 use App\Models\AssetReview;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 final class ExtensionController extends Controller
@@ -13,9 +14,12 @@ final class ExtensionController extends Controller
     {
         $query = Asset::query()
             ->where('status', 'published')
-            ->where('approval_status', 'approved')
             ->with('publishedVersions')
             ->orderByDesc('published_at');
+
+        if ($this->hasApprovalStatusColumn()) {
+            $query->where('approval_status', 'approved');
+        }
 
         $type = $request->query('type');
         if (is_string($type) && $type !== '') {
@@ -41,11 +45,15 @@ final class ExtensionController extends Controller
 
     public function show(string $slug): View
     {
-        $asset = Asset::where('slug', $slug)
+        $assetQuery = Asset::where('slug', $slug)
             ->where('status', 'published')
-            ->where('approval_status', 'approved')
-            ->with('publishedVersions')
-            ->firstOrFail();
+            ->with('publishedVersions');
+
+        if ($this->hasApprovalStatusColumn()) {
+            $assetQuery->where('approval_status', 'approved');
+        }
+
+        $asset = $assetQuery->firstOrFail();
 
         $reviews = AssetReview::where('asset_id', $asset->id)
             ->where('status', 'approved')
@@ -67,5 +75,18 @@ final class ExtensionController extends Controller
             'avgRating' => $avgRating ? round((float) $avgRating, 1) : null,
             'reviewCount' => $reviewCount,
         ]);
+    }
+
+    private function hasApprovalStatusColumn(): bool
+    {
+        static $cached = null;
+
+        if (is_bool($cached)) {
+            return $cached;
+        }
+
+        $cached = Schema::hasColumn('assets', 'approval_status');
+
+        return $cached;
     }
 }

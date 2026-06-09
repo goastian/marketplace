@@ -6,17 +6,22 @@ use App\Models\Asset;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Schema;
 
 final class SitemapController extends Controller
 {
     public function index(): Response
     {
         $locales = ['en', 'es'];
-        $assets = Asset::query()
+        $assetsQuery = Asset::query()
             ->where('status', 'published')
-            ->where('approval_status', 'approved')
-            ->orderByDesc('updated_at')
-            ->get(['slug', 'type', 'updated_at']);
+            ->orderByDesc('updated_at');
+
+        if ($this->hasApprovalStatusColumn()) {
+            $assetsQuery->where('approval_status', 'approved');
+        }
+
+        $assets = $assetsQuery->get(['slug', 'type', 'updated_at']);
 
         $xml = '<?xml version="1.0" encoding="UTF-8"?>';
         $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">';
@@ -76,5 +81,18 @@ final class SitemapController extends Controller
         $entry .= '</url>';
 
         return $entry;
+    }
+
+    private function hasApprovalStatusColumn(): bool
+    {
+        static $cached = null;
+
+        if (is_bool($cached)) {
+            return $cached;
+        }
+
+        $cached = Schema::hasColumn('assets', 'approval_status');
+
+        return $cached;
     }
 }
