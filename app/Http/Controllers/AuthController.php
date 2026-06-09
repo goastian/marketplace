@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 final class AuthController extends Controller
@@ -22,15 +23,29 @@ final class AuthController extends Controller
             $request->session()->put('url.intended', $next);
         }
 
+        $authorizeUrl = $this->oidcConfig('authorize_url');
+        $clientId = $this->oidcConfig('client_id');
+        $redirectUri = $this->resolveRedirectUri();
+
+        if (! $authorizeUrl || ! $clientId || ! $redirectUri) {
+            Log::error('Authentik OIDC login misconfiguration', [
+                'authorize_url_present' => (bool) $authorizeUrl,
+                'client_id_present' => (bool) $clientId,
+                'redirect_uri_present' => (bool) $redirectUri,
+            ]);
+
+            return redirect('/')->with('error', 'Authentication provider is not configured.');
+        }
+
         $query = http_build_query([
-            'client_id' => config('authentik-oidc.client_id'),
-            'redirect_uri' => url(config('authentik-oidc.redirect_uri')),
+            'client_id' => $clientId,
+            'redirect_uri' => $redirectUri,
             'response_type' => 'code',
             'scope' => config('authentik-oidc.scopes'),
             'state' => $state,
         ]);
 
-        return redirect(config('authentik-oidc.authorize_url') . '?' . $query);
+        return redirect(rtrim($authorizeUrl, '?') . '?' . $query);
     }
 
     public function callback(Request $request): RedirectResponse
@@ -48,12 +63,28 @@ final class AuthController extends Controller
             return redirect('/')->with('error', 'Authorization failed.');
         }
 
-        $tokenResponse = Http::asForm()->post(config('authentik-oidc.token_url'), [
+        $tokenUrl = $this->oidcConfig('token_url');
+        $clientId = $this->oidcConfig('client_id');
+        $clientSecret = $this->oidcConfig('client_secret');
+        $redirectUri = $this->resolveRedirectUri();
+
+        if (! $tokenUrl || ! $clientId || ! $clientSecret || ! $redirectUri) {
+            Log::error('Authentik OIDC callback misconfiguration (token exchange)', [
+                'token_url_present' => (bool) $tokenUrl,
+                'client_id_present' => (bool) $clientId,
+                'client_secret_present' => (bool) $clientSecret,
+                'redirect_uri_present' => (bool) $redirectUri,
+            ]);
+
+            return redirect('/')->with('error', 'Authentication provider is not configured.');
+        }
+
+        $tokenResponse = Http::asForm()->post($tokenUrl, [
             'grant_type' => 'authorization_code',
             'code' => $code,
-            'redirect_uri' => url(config('authentik-oidc.redirect_uri')),
-            'client_id' => config('authentik-oidc.client_id'),
-            'client_secret' => config('authentik-oidc.client_secret'),
+            'redirect_uri' => $redirectUri,
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
         ]);
 
         if (! $tokenResponse->successful()) {
@@ -68,8 +99,14 @@ final class AuthController extends Controller
         }
 
         // Fetch userinfo.
+        $userinfoUrl = $this->oidcConfig('userinfo_url');
+        if (! $userinfoUrl) {
+            Log::error('Authentik OIDC callback misconfiguration (userinfo URL missing)');
+            return redirect('/')->with('error', 'Authentication provider is not configured.');
+        }
+
         $userinfoResponse = Http::withToken($accessToken)
-            ->get(config('authentik-oidc.userinfo_url'));
+            ->get($userinfoUrl);
 
         if (! $userinfoResponse->successful()) {
             return redirect('/')->with('error', 'Could not fetch user info.');
@@ -142,5 +179,31 @@ final class AuthController extends Controller
         }
 
         return 'user';
+    }
+
+    private function oidcConfig(string $key): ?string
+    {
+        $value = config("authentik-oidc.{$key}");
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed !== '' ? $trimmed : null;
+    }
+
+    private function resolveRedirectUri(): ?string
+    {
+        $configured = $this->oidcConfig('redirect_uri');
+        if (! $configured) {
+            return null;
+        }
+
+        if (str_starts_with($configured, 'http://') || str_starts_with($configured, 'https://')) {
+            return $configured;
+        }
+
+        return url($configured);
     }
 }

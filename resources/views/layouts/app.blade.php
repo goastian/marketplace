@@ -43,7 +43,7 @@
             "url": "{{ url('/') }}",
             "potentialAction": {
                 "@type": "SearchAction",
-                "target": "{{ url('/en/extensions?q={search_term_string}') }}",
+                "target": "{{ url('/?q={search_term_string}') }}",
                 "query-input": "required name=search_term_string"
             }
         }

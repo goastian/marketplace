@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ExtensionController;
 use App\Http\Controllers\SitemapController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // Sitemap (no locale prefix).
@@ -43,7 +44,12 @@ Route::prefix('{locale?}')
     ->where(['locale' => 'en|es'])
     ->middleware(\App\Http\Middleware\DetectLocale::class)
     ->group(function () {
-        Route::get('/extensions', [ExtensionController::class, 'index'])->name('extensions.index');
+        Route::get('/extensions', function (Request $request, string $locale) {
+            $query = $request->query();
+            $query['lang'] = $locale;
+
+            return redirect('/' . ($query !== [] ? ('?' . http_build_query($query)) : ''), 302);
+        })->name('extensions.index');
         Route::get('/extensions/{slug}', [ExtensionController::class, 'show'])->name('extensions.show');
 
         Route::get('/contact', function () {
