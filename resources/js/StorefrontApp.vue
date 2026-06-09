@@ -102,10 +102,61 @@ function iconForType(type) {
     return icons[type] || '⬡';
 }
 
+function firstNonEmptyString(values) {
+    for (const value of values) {
+        if (typeof value === 'string' && value.trim() !== '') {
+            return value.trim();
+        }
+    }
+
+    return '';
+}
+
+function resolveAssetPreviewUrl(raw, latestVersion) {
+    const manifest = latestVersion?.manifest || {};
+    const preview = manifest.preview || {};
+    const distribution = manifest.distribution || {};
+    const media = Array.isArray(manifest?.payload?.media) ? (manifest.payload.media[0] || {}) : {};
+
+    return firstNonEmptyString([
+        raw.preview_url,
+        raw.previewUrl,
+        media.previewUrl,
+        media.thumbnailUrl,
+        media.thumbUrl,
+        preview.thumbnailUrl,
+        preview.smallUrl,
+        preview.url,
+        media.optimizedUrl,
+        media.fullUrl,
+        media.assetUrl,
+        media.url,
+        distribution.assetUrl,
+        distribution.downloadUrl,
+        distribution.url,
+    ]);
+}
+
+function previewStyleFor(item, withOverlay = true) {
+    if (item.previewImageUrl) {
+        return {
+            backgroundImage: withOverlay
+                ? `linear-gradient(180deg, rgba(15, 23, 42, 0.25), rgba(15, 23, 42, 0.15)), url(${item.previewImageUrl})`
+                : `url(${item.previewImageUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+        };
+    }
+
+    return { background: item.gradient };
+}
+
 function parseAsset(raw) {
     const lv = raw.latest_version || null;
     const browsers = Array.isArray(lv?.browsers) ? lv.browsers : [];
     const tags = Array.isArray(raw.tags) ? raw.tags : [];
+    const previewImageUrl = resolveAssetPreviewUrl(raw, lv);
+
     return {
         id: raw.id,
         slug: raw.slug,
@@ -116,6 +167,7 @@ function parseAsset(raw) {
         tags,
         browsers,
         version: lv?.version || null,
+        previewImageUrl,
         gradient: gradientForType(raw.type),
     };
 }
@@ -290,7 +342,7 @@ onMounted(() => {
             <div class="featured-inner">
                 <h2 class="section-title">{{ t('storefront.featured') }}</h2>
                 <div class="featured-card" v-for="item in featured" :key="`f-${item.id}`">
-                    <div class="featured-thumb" :style="{ background: item.gradient }"></div>
+                    <div class="featured-thumb" :style="previewStyleFor(item)"></div>
                     <div class="featured-body">
                         <span class="featured-type-badge">{{ typeLabel(item.type) }}</span>
                         <h3>{{ item.name }}</h3>
@@ -345,8 +397,8 @@ onMounted(() => {
                         @click="openPreview(item)"
                     >
                         <div class="card-visual">
-                            <div class="card-icon-wrap" :style="{ background: item.gradient }">
-                                <span class="card-icon-glyph">{{ iconForType(item.type) }}</span>
+                            <div class="card-icon-wrap" :style="previewStyleFor(item, false)">
+                                <span v-if="!item.previewImageUrl" class="card-icon-glyph">{{ iconForType(item.type) }}</span>
                             </div>
                         </div>
                         <h3 class="card-name">{{ item.name }}</h3>
@@ -377,8 +429,8 @@ onMounted(() => {
                 <div class="modal-panel">
                     <button class="modal-close" @click="closePreview" :aria-label="t('common.close')">✕</button>
 
-                    <div class="modal-banner" :style="{ background: previewItem.gradient }">
-                        <div class="modal-banner-icon">{{ iconForType(previewItem.type) }}</div>
+                    <div class="modal-banner" :style="previewStyleFor(previewItem)">
+                        <div v-if="!previewItem.previewImageUrl" class="modal-banner-icon">{{ iconForType(previewItem.type) }}</div>
                     </div>
 
                     <div class="modal-body">
