@@ -121,7 +121,16 @@ function parseAsset(raw) {
 }
 
 async function apiFetch(path) {
-    const res = await fetch(`${API_BASE}${path}`, { headers: { Accept: 'application/json' } });
+    const separator = path.includes('?') ? '&' : '?';
+    const cacheBustedPath = `${path}${separator}_ts=${Date.now()}`;
+    const res = await fetch(`${API_BASE}${cacheBustedPath}`, {
+        cache: 'no-store',
+        headers: {
+            Accept: 'application/json',
+            'Cache-Control': 'no-cache',
+            Pragma: 'no-cache',
+        },
+    });
     if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.message || `Error ${res.status}`);
