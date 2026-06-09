@@ -170,6 +170,15 @@ final class ManagedAssetController extends Controller
             }
         }
 
+        if (
+            $hasApprovalStatusColumn
+            && $request->user()->isAdmin()
+            && (($validated['status'] ?? $asset->status) === 'published')
+            && $asset->approval_status !== 'approved'
+        ) {
+            $validated['approval_status'] = 'approved';
+        }
+
         $asset->fill($validated);
         $asset->save();
         $asset->load(['versions' => fn ($query) => $query->orderByDesc('id')]);
