@@ -78,6 +78,132 @@ final class AdminController extends Controller
         ]);
     }
 
+    public function catalogDiagnostics(Request $request): JsonResponse
+    {
+        $hasApprovalStatusColumn = $this->hasApprovalStatusColumn();
+        $type = $request->query('type');
+        $search = $request->query('q');
+        $tags = $request->query('tags');
+
+        if (is_string($tags) && $tags !== '') {
+            $tags = array_filter(array_map('trim', explode(',', $tags)));
+        }
+
+        $statusBreakdown = Asset::query()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->toArray();
+
+        $approvalBreakdown = [];
+        if ($hasApprovalStatusColumn) {
+            $approvalBreakdown = Asset::query()
+                ->selectRaw("COALESCE(approval_status, '__null__') as approval_status, COUNT(*) as total")
+                ->groupBy('approval_status')
+                ->pluck('total', 'approval_status')
+                ->toArray();
+        }
+
+        $typeBreakdown = Asset::query()
+            ->selectRaw('type, COUNT(*) as total')
+            ->groupBy('type')
+            ->pluck('total', 'type')
+            ->toArray();
+
+        $publishedCount = Asset::query()->where('status', 'published')->count();
+        $approvedPublishedCount = $publishedCount;
+
+        if ($hasApprovalStatusColumn) {
+            $approvedPublishedCount = Asset::query()
+                ->where('status', 'published')
+                ->where('approval_status', 'approved')
+                ->count();
+        }
+
+        $catalogQuery = Asset::query()
+            ->where('status', 'published')
+            ->orderByDesc('published_at')
+            ->orderByDesc('id');
+
+        if ($hasApprovalStatusColumn) {
+            $catalogQuery->where('approval_status', 'approved');
+        }
+
+        if (is_string($type) && $type !== '') {
+            $catalogQuery->where('type', $type);
+        }
+
+        if (is_string($search) && $search !== '') {
+            $catalogQuery->where(function ($inner) use ($search) {
+                $inner->where('name', 'like', '%'.$search.'%')
+                    ->orWhere('description', 'like', '%'.$search.'%')
+                    ->orWhere('slug', 'like', '%'.$search.'%');
+            });
+        }
+
+        if (is_array($tags) && $tags !== []) {
+            $catalogQuery->where(function ($inner) use ($tags) {
+                foreach ($tags as $tag) {
+                    if (is_string($tag) && $tag !== '') {
+                        $inner->orWhere('tags', 'like', '%"'.$tag.'"%');
+                    }
+                }
+            });
+        }
+
+        $catalogTotal = (clone $catalogQuery)->count();
+        $catalogSample = (clone $catalogQuery)
+            ->limit(10)
+            ->get()
+            ->map(function (Asset $asset) use ($hasApprovalStatusColumn): array {
+                return [
+                    'id' => $asset->id,
+                    'slug' => $asset->slug,
+                    'type' => $asset->type,
+                    'status' => $asset->status,
+                    'approval_status' => $hasApprovalStatusColumn ? $asset->approval_status : null,
+                    'published_at' => $asset->published_at?->toISOString(),
+                ];
+            })
+            ->values();
+
+        $requestedTypeDiagnostics = null;
+        if (is_string($type) && $type !== '') {
+            $requestedTypeDiagnostics = [
+                'requested_type' => $type,
+                'type_any_status_count' => Asset::query()->where('type', $type)->count(),
+                'type_published_count' => Asset::query()->where('type', $type)->where('status', 'published')->count(),
+                'type_approved_published_count' => $hasApprovalStatusColumn
+                    ? Asset::query()->where('type', $type)->where('status', 'published')->where('approval_status', 'approved')->count()
+                    : Asset::query()->where('type', $type)->where('status', 'published')->count(),
+            ];
+        }
+
+        return response()->json([
+            'data' => [
+                'filters' => [
+                    'type' => $type,
+                    'search' => $search,
+                    'tags' => $tags,
+                ],
+                'has_approval_status_column' => $hasApprovalStatusColumn,
+                'totals' => [
+                    'all_assets_count' => Asset::count(),
+                    'published_count' => $publishedCount,
+                    'approved_published_count' => $approvedPublishedCount,
+                ],
+                'status_breakdown' => $statusBreakdown,
+                'approval_breakdown' => $approvalBreakdown,
+                'type_breakdown' => $typeBreakdown,
+                'requested_type_diagnostics' => $requestedTypeDiagnostics,
+                'catalog_query' => [
+                    'total' => $catalogTotal,
+                    'sample' => $catalogSample,
+                ],
+            ],
+        ]);
+    }
+
     public function show(Asset $asset): JsonResponse
     {
         $asset->load(['versions', 'owner']);

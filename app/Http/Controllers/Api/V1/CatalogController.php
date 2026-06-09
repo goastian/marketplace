@@ -19,15 +19,29 @@ final class CatalogController extends Controller
     public function index(Request $request): JsonResponse
     {
         $hasApprovalStatusColumn = $this->hasApprovalStatusColumn();
+        $type = $request->query('type');
+        $search = $request->query('q');
+        $tags = $request->query('tags');
 
         Log::info('marketplace.catalog.index.start', $this->catalogContext($request) + [
-            'type' => $request->query('type'),
-            'search' => $request->query('q'),
-            'tags' => $request->query('tags'),
+            'type' => $type,
+            'search' => $search,
+            'tags' => $tags,
             'page' => $request->integer('page', 1),
             'per_page' => $request->integer('per_page', 20),
             'has_approval_status_column' => $hasApprovalStatusColumn,
         ]);
+
+        $allAssetsCount = Asset::count();
+        $publishedCount = Asset::query()->where('status', 'published')->count();
+        $approvedPublishedCount = $publishedCount;
+
+        if ($hasApprovalStatusColumn) {
+            $approvedPublishedCount = Asset::query()
+                ->where('status', 'published')
+                ->where('approval_status', 'approved')
+                ->count();
+        }
 
         $query = Asset::query()
             ->where('status', 'published')
@@ -38,13 +52,9 @@ final class CatalogController extends Controller
             $query->where('approval_status', 'approved');
         }
 
-        $type = $request->query('type');
-
         if (is_string($type) && $type !== '') {
             $query->where('type', $type);
         }
-
-        $search = $request->query('q');
 
         if (is_string($search) && $search !== '') {
             $query->where(function ($inner) use ($search) {
@@ -53,8 +63,6 @@ final class CatalogController extends Controller
                     ->orWhere('slug', 'like', '%'.$search.'%');
             });
         }
-
-        $tags = $request->query('tags');
 
         if (is_string($tags) && $tags !== '') {
             $tags = array_filter(array_map('trim', explode(',', $tags)));
@@ -85,7 +93,55 @@ final class CatalogController extends Controller
             'last_page' => $assets->lastPage(),
             'returned_count' => $assetItems->count(),
             'types_in_page' => $typesInPage,
+            'all_assets_count' => $allAssetsCount,
+            'published_count' => $publishedCount,
+            'approved_published_count' => $approvedPublishedCount,
         ]);
+
+        if ($assets->total() === 0 && $allAssetsCount > 0) {
+            $statusBreakdown = Asset::query()
+                ->selectRaw('status, COUNT(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'status')
+                ->toArray();
+
+            $approvalBreakdown = [];
+            if ($hasApprovalStatusColumn) {
+                $approvalBreakdown = Asset::query()
+                    ->selectRaw("COALESCE(approval_status, '__null__') as approval_status, COUNT(*) as total")
+                    ->groupBy('approval_status')
+                    ->pluck('total', 'approval_status')
+                    ->toArray();
+            }
+
+            $typeBreakdown = Asset::query()
+                ->selectRaw('type, COUNT(*) as total')
+                ->groupBy('type')
+                ->pluck('total', 'type')
+                ->toArray();
+
+            $typeDiagnostics = null;
+            if (is_string($type) && $type !== '') {
+                $typeDiagnostics = [
+                    'requested_type' => $type,
+                    'type_any_status_count' => Asset::query()->where('type', $type)->count(),
+                    'type_published_count' => Asset::query()->where('type', $type)->where('status', 'published')->count(),
+                    'type_approved_published_count' => $hasApprovalStatusColumn
+                        ? Asset::query()->where('type', $type)->where('status', 'published')->where('approval_status', 'approved')->count()
+                        : Asset::query()->where('type', $type)->where('status', 'published')->count(),
+                ];
+            }
+
+            Log::warning('marketplace.catalog.index.zero_results_diagnostics', $this->catalogContext($request) + [
+                'type' => $type,
+                'search' => $search,
+                'tags' => $tags,
+                'status_breakdown' => $statusBreakdown,
+                'approval_breakdown' => $approvalBreakdown,
+                'type_breakdown' => $typeBreakdown,
+                'type_diagnostics' => $typeDiagnostics,
+            ]);
+        }
 
         return response()->json([
             'data' => $assetItems->map(fn (Asset $asset): array => $this->transformAssetSummary($asset))->values(),

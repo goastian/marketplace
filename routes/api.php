@@ -41,6 +41,7 @@ Route::prefix('v1')->group(function () {
     // Admin routes (Bearer JWT or web session).
     Route::middleware(['web', 'authentik.jwt', 'role:admin', 'throttle:api-authenticated'])->prefix('admin')->group(function () {
         Route::get('/stats', [\App\Http\Controllers\Api\V1\AdminController::class, 'stats']);
+        Route::get('/catalog-diagnostics', [\App\Http\Controllers\Api\V1\AdminController::class, 'catalogDiagnostics']);
         Route::get('/assets', [\App\Http\Controllers\Api\V1\AdminController::class, 'index']);
         Route::get('/assets/{asset}', [\App\Http\Controllers\Api\V1\AdminController::class, 'show']);
         Route::post('/assets', [\App\Http\Controllers\Api\V1\AdminController::class, 'store']);
