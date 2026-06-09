@@ -164,6 +164,15 @@ final class ManagedAssetController extends Controller
     {
         $this->abortIfNotOwner($request, $asset);
 
+        // Multipart submissions send manifest as a JSON string.
+        $manifestInput = $request->input('manifest');
+        if (is_string($manifestInput)) {
+            $decodedManifest = json_decode($manifestInput, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decodedManifest)) {
+                $request->merge(['manifest' => $decodedManifest]);
+            }
+        }
+
         $validated = $request->validate([
             'version' => ['required', 'string', 'max:64'],
             'status' => ['nullable', 'string', 'in:draft,published'],

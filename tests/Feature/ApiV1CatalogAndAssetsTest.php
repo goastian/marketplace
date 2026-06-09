@@ -169,6 +169,18 @@ final class ApiV1CatalogAndAssetsTest extends TestCase
             ->assertJsonPath('data.version', '1.0.0')
             ->assertJsonPath('data.status', 'published');
 
+        $versionWithJsonManifest = $this
+            ->withHeader('Authorization', 'Bearer '.$jwt)
+            ->post('/api/v1/me/assets/'.$assetId.'/versions', [
+                'version' => '1.0.1',
+                'manifest' => json_encode(['name' => 'Mint Theme', 'entry' => 'index-v2.json']),
+                'file_path' => 'assets/'.$assetId.'/versions/1.0.1.zip',
+            ]);
+
+        $versionWithJsonManifest
+            ->assertStatus(201)
+            ->assertJsonPath('data.version', '1.0.1');
+
         $list = $this
             ->withHeader('Authorization', 'Bearer '.$jwt)
             ->getJson('/api/v1/me/assets');
@@ -177,7 +189,8 @@ final class ApiV1CatalogAndAssetsTest extends TestCase
             ->assertStatus(200)
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.slug', 'mint-theme')
-            ->assertJsonPath('data.0.versions.0.version', '1.0.0');
+            ->assertJsonPath('data.0.versions.0.version', '1.0.1')
+            ->assertJsonPath('data.0.versions.1.version', '1.0.0');
 
         // Asset is not publicly visible until admin approves it.
         $this->getJson('/api/v1/assets/mint-theme')->assertStatus(404);
