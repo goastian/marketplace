@@ -137,6 +137,14 @@ function resolveAssetPreviewUrl(raw, latestVersion) {
     ]);
 }
 
+function buildWallpaperPreviewFallbackUrl(raw) {
+    if (raw?.type !== 'wallpaper' || !raw?.slug) {
+        return '';
+    }
+
+    return `${API_BASE}/assets/${encodeURIComponent(raw.slug)}/download`;
+}
+
 function previewStyleFor(item, withOverlay = true) {
     if (item.previewImageUrl) {
         return {
@@ -155,7 +163,7 @@ function parseAsset(raw) {
     const lv = raw.latest_version || null;
     const browsers = Array.isArray(lv?.browsers) ? lv.browsers : [];
     const tags = Array.isArray(raw.tags) ? raw.tags : [];
-    const previewImageUrl = resolveAssetPreviewUrl(raw, lv);
+    const previewImageUrl = resolveAssetPreviewUrl(raw, lv) || buildWallpaperPreviewFallbackUrl(raw);
 
     return {
         id: raw.id,
