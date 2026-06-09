@@ -8,15 +8,25 @@ use App\Models\AssetSubmission;
 use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 final class AdminController extends Controller
 {
     public function stats(Request $request): JsonResponse
     {
+        $hasApprovalStatusColumn = $this->hasApprovalStatusColumn();
+        $publishedAssetsQuery = Asset::where('status', 'published');
+
+        if ($hasApprovalStatusColumn) {
+            $publishedAssetsQuery->where('approval_status', 'approved');
+        }
+
         return response()->json([
             'total_assets' => Asset::count(),
-            'published_assets' => Asset::where('status', 'published')->where('approval_status', 'approved')->count(),
-            'pending_approval' => Asset::where('approval_status', 'pending')->count(),
+            'published_assets' => $publishedAssetsQuery->count(),
+            'pending_approval' => $hasApprovalStatusColumn
+                ? Asset::where('approval_status', 'pending')->count()
+                : 0,
             'draft_assets' => Asset::where('status', 'draft')->count(),
             'official_assets' => Asset::where('is_official', true)->count(),
             'pending_submissions' => AssetSubmission::where('status', 'pending')->count(),
@@ -25,6 +35,8 @@ final class AdminController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $hasApprovalStatusColumn = $this->hasApprovalStatusColumn();
+
         $query = Asset::query()
             ->with(['versions', 'owner'])
             ->orderByDesc('id');
@@ -40,7 +52,7 @@ final class AdminController extends Controller
         }
 
         $approval = $request->query('approval_status');
-        if (is_string($approval) && $approval !== '') {
+        if ($hasApprovalStatusColumn && is_string($approval) && $approval !== '') {
             $query->where('approval_status', $approval);
         }
 
@@ -102,9 +114,8 @@ final class AdminController extends Controller
             'tags' => $validated['tags'] ?? [],
             'status' => $status,
             'is_official' => true,
-            'approval_status' => 'approved',
             'published_at' => $status === 'published' ? now() : null,
-        ]);
+        ] + ($this->hasApprovalStatusColumn() ? ['approval_status' => 'approved'] : []));
 
         AuditLog::record('admin.asset.create', $user->id, 'Asset', $asset->id, null, $request->ip());
 
@@ -113,6 +124,10 @@ final class AdminController extends Controller
 
     public function approve(Request $request, Asset $asset): JsonResponse
     {
+        if (! $this->hasApprovalStatusColumn()) {
+            return response()->json(['data' => $this->transform($asset->fresh())]);
+        }
+
         $asset->update(['approval_status' => 'approved']);
 
         $submission = AssetSubmission::where('asset_id', $asset->id)
@@ -135,6 +150,10 @@ final class AdminController extends Controller
 
     public function reject(Request $request, Asset $asset): JsonResponse
     {
+        if (! $this->hasApprovalStatusColumn()) {
+            return response()->json(['data' => $this->transform($asset->fresh())]);
+        }
+
         $validated = $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -162,6 +181,10 @@ final class AdminController extends Controller
 
     public function requestRevision(Request $request, Asset $asset): JsonResponse
     {
+        if (! $this->hasApprovalStatusColumn()) {
+            return response()->json(['data' => $this->transform($asset->fresh())]);
+        }
+
         $validated = $request->validate([
             'notes' => ['required', 'string', 'max:2000'],
         ]);
@@ -206,7 +229,9 @@ final class AdminController extends Controller
             'tags' => $asset->tags ?? [],
             'status' => $asset->status,
             'is_official' => (bool) $asset->is_official,
-            'approval_status' => $asset->approval_status,
+            'approval_status' => $this->hasApprovalStatusColumn()
+                ? $asset->approval_status
+                : ($asset->status === 'published' ? 'approved' : 'pending'),
             'published_at' => $asset->published_at?->toISOString(),
             'versions' => $asset->relationLoaded('versions')
                 ? $asset->versions->map(fn ($v) => [
@@ -220,5 +245,18 @@ final class AdminController extends Controller
             'created_at' => $asset->created_at?->toISOString(),
             'updated_at' => $asset->updated_at?->toISOString(),
         ];
+    }
+
+    private function hasApprovalStatusColumn(): bool
+    {
+        static $cached = null;
+
+        if (is_bool($cached)) {
+            return $cached;
+        }
+
+        $cached = Schema::hasColumn('assets', 'approval_status');
+
+        return $cached;
     }
 }

@@ -12,6 +12,7 @@ use App\Services\InputSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -55,6 +56,7 @@ final class ManagedAssetController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
+        $hasApprovalStatusColumn = $this->hasApprovalStatusColumn();
 
         $validated = $request->validate([
             'type' => ['required', 'string', 'in:wallpaper,theme,widget,animation,collection,midori-update'],
@@ -80,7 +82,12 @@ final class ManagedAssetController extends Controller
 
         $status = $validated['status'] ?? 'draft';
 
-        $asset = Asset::query()->create([
+        $approvalStatus = 'pending';
+        if ($status === 'published' && $user->isAdmin()) {
+            $approvalStatus = 'approved';
+        }
+
+        $assetPayload = [
             'owner_user_id' => $user->id,
             'type' => $validated['type'],
             'slug' => $validated['slug'],
@@ -90,11 +97,16 @@ final class ManagedAssetController extends Controller
             'license' => $validated['license'] ?? null,
             'tags' => $validated['tags'] ?? [],
             'status' => $status,
-            'approval_status' => 'pending',
             'published_at' => $status === 'published' ? now() : null,
-        ]);
+        ];
 
-        if ($status === 'published') {
+        if ($hasApprovalStatusColumn) {
+            $assetPayload['approval_status'] = $approvalStatus;
+        }
+
+        $asset = Asset::query()->create($assetPayload);
+
+        if ($status === 'published' && (! $hasApprovalStatusColumn || $approvalStatus !== 'approved')) {
             AssetSubmission::query()->create([
                 'asset_id' => $asset->id,
                 'submitted_by' => $user->id,
@@ -111,6 +123,7 @@ final class ManagedAssetController extends Controller
     public function update(Request $request, Asset $asset): JsonResponse
     {
         $this->abortIfNotOwner($request, $asset);
+        $hasApprovalStatusColumn = $this->hasApprovalStatusColumn();
 
         $validated = $request->validate([
             'type' => ['sometimes', 'string', 'in:wallpaper,theme,widget,animation,collection,midori-update'],
@@ -140,14 +153,20 @@ final class ManagedAssetController extends Controller
                 : null;
 
             if ($validated['status'] === 'published' && $asset->status !== 'published') {
-                $validated['approval_status'] = 'pending';
+                $approvalStatus = $request->user()->isAdmin() ? 'approved' : 'pending';
 
-                AssetSubmission::query()->create([
-                    'asset_id' => $asset->id,
-                    'submitted_by' => $request->user()->id,
-                    'status' => 'pending',
-                    'submitted_at' => now(),
-                ]);
+                if ($hasApprovalStatusColumn) {
+                    $validated['approval_status'] = $approvalStatus;
+                }
+
+                if (! $hasApprovalStatusColumn || $approvalStatus !== 'approved') {
+                    AssetSubmission::query()->create([
+                        'asset_id' => $asset->id,
+                        'submitted_by' => $request->user()->id,
+                        'status' => 'pending',
+                        'submitted_at' => now(),
+                    ]);
+                }
             }
         }
 
@@ -301,5 +320,18 @@ final class ManagedAssetController extends Controller
             'created_at' => $version->created_at?->toISOString(),
             'updated_at' => $version->updated_at?->toISOString(),
         ];
+    }
+
+    private function hasApprovalStatusColumn(): bool
+    {
+        static $cached = null;
+
+        if (is_bool($cached)) {
+            return $cached;
+        }
+
+        $cached = Schema::hasColumn('assets', 'approval_status');
+
+        return $cached;
     }
 }
