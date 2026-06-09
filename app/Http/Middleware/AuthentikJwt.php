@@ -7,6 +7,7 @@ use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -16,18 +17,27 @@ final class AuthentikJwt
     {
         // If user is already authenticated via web session, allow through.
         if (Auth::check()) {
+            Log::debug('marketplace.auth.jwt.session_authenticated', $this->requestContext($request) + [
+                'user_id' => Auth::id(),
+            ]);
+
             return $next($request);
         }
 
         $token = $request->bearerToken();
 
         if (! is_string($token) || $token === '') {
+            Log::warning('marketplace.auth.jwt.missing_bearer_token', $this->requestContext($request));
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
         try {
             $claims = app(AuthentikJwtValidator::class)->validate($token);
         } catch (\Throwable $e) {
+            Log::warning('marketplace.auth.jwt.invalid_token', $this->requestContext($request) + [
+                'exception' => $e::class,
+                'error' => $e->getMessage(),
+            ]);
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
@@ -36,6 +46,10 @@ final class AuthentikJwt
         $name = (string) ($claims['name'] ?? '');
 
         if ($sub === '' || $email === '') {
+            Log::warning('marketplace.auth.jwt.missing_claims', $this->requestContext($request) + [
+                'sub_present' => $sub !== '',
+                'email_present' => $email !== '',
+            ]);
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
@@ -51,7 +65,23 @@ final class AuthentikJwt
 
         Auth::setUser($user);
 
+        Log::info('marketplace.auth.jwt.authenticated', $this->requestContext($request) + [
+            'user_id' => $user->id,
+            'role' => $user->role,
+            'auth_sub' => $sub,
+        ]);
+
         return $next($request);
+    }
+
+    private function requestContext(Request $request): array
+    {
+        return [
+            'path' => $request->path(),
+            'method' => $request->method(),
+            'ip' => $request->ip(),
+            'request_id' => $request->header('X-Request-Id'),
+        ];
     }
 
     private function resolveRole(array $claims): string

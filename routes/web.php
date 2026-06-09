@@ -5,6 +5,7 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ExtensionController;
 use App\Http\Controllers\SitemapController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 
 // Sitemap (no locale prefix).
@@ -22,6 +23,16 @@ Route::get('/', function () {
 
 // Session-based user info for SPA.
 Route::get('/auth/user', function (\Illuminate\Http\Request $request) {
+    Log::info('marketplace.auth.session_user.check', [
+        'path' => $request->path(),
+        'method' => $request->method(),
+        'ip' => $request->ip(),
+        'request_id' => $request->header('X-Request-Id'),
+        'is_authenticated' => (bool) $request->user(),
+        'user_id' => $request->user()?->id,
+        'role' => $request->user()?->role,
+    ]);
+
     if ($request->user()) {
         return response()->json([
             'data' => [

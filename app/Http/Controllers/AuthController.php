@@ -15,6 +15,10 @@ final class AuthController extends Controller
 {
     public function login(Request $request): RedirectResponse
     {
+        Log::info('marketplace.auth.login.start', $this->authContext($request) + [
+            'has_next' => is_string($request->query('next')),
+        ]);
+
         $state = Str::random(40);
         $request->session()->put('oidc_state', $state);
 
@@ -32,7 +36,7 @@ final class AuthController extends Controller
                 'authorize_url_present' => (bool) $authorizeUrl,
                 'client_id_present' => (bool) $clientId,
                 'redirect_uri_present' => (bool) $redirectUri,
-            ]);
+            ] + $this->authContext($request));
 
             return redirect('/')->with('error', 'Authentication provider is not configured.');
         }
@@ -45,21 +49,32 @@ final class AuthController extends Controller
             'state' => $state,
         ]);
 
+        Log::info('marketplace.auth.login.redirect', $this->authContext($request) + [
+            'redirect_uri' => $redirectUri,
+        ]);
+
         return redirect(rtrim($authorizeUrl, '?') . '?' . $query);
     }
 
     public function callback(Request $request): RedirectResponse
     {
+        Log::info('marketplace.auth.callback.start', $this->authContext($request) + [
+            'has_state' => is_string($request->query('state')),
+            'has_code' => is_string($request->query('code')),
+        ]);
+
         $state = $request->query('state');
         $sessionState = $request->session()->pull('oidc_state');
 
         if (! is_string($state) || ! hash_equals((string) $sessionState, $state)) {
+            Log::warning('marketplace.auth.callback.invalid_state', $this->authContext($request));
             return redirect('/')->with('error', 'Invalid state.');
         }
 
         $code = $request->query('code');
 
         if (! is_string($code) || $code === '') {
+            Log::warning('marketplace.auth.callback.missing_code', $this->authContext($request));
             return redirect('/')->with('error', 'Authorization failed.');
         }
 
@@ -74,7 +89,7 @@ final class AuthController extends Controller
                 'client_id_present' => (bool) $clientId,
                 'client_secret_present' => (bool) $clientSecret,
                 'redirect_uri_present' => (bool) $redirectUri,
-            ]);
+            ] + $this->authContext($request));
 
             return redirect('/')->with('error', 'Authentication provider is not configured.');
         }
@@ -88,6 +103,9 @@ final class AuthController extends Controller
         ]);
 
         if (! $tokenResponse->successful()) {
+            Log::warning('marketplace.auth.callback.token_exchange_failed', $this->authContext($request) + [
+                'status_code' => $tokenResponse->status(),
+            ]);
             return redirect('/')->with('error', 'Token exchange failed.');
         }
 
@@ -95,13 +113,14 @@ final class AuthController extends Controller
         $accessToken = $tokens['access_token'] ?? null;
 
         if (! is_string($accessToken)) {
+            Log::warning('marketplace.auth.callback.missing_access_token', $this->authContext($request));
             return redirect('/')->with('error', 'No access token received.');
         }
 
         // Fetch userinfo.
         $userinfoUrl = $this->oidcConfig('userinfo_url');
         if (! $userinfoUrl) {
-            Log::error('Authentik OIDC callback misconfiguration (userinfo URL missing)');
+            Log::error('Authentik OIDC callback misconfiguration (userinfo URL missing)', $this->authContext($request));
             return redirect('/')->with('error', 'Authentication provider is not configured.');
         }
 
@@ -109,6 +128,9 @@ final class AuthController extends Controller
             ->get($userinfoUrl);
 
         if (! $userinfoResponse->successful()) {
+            Log::warning('marketplace.auth.callback.userinfo_failed', $this->authContext($request) + [
+                'status_code' => $userinfoResponse->status(),
+            ]);
             return redirect('/')->with('error', 'Could not fetch user info.');
         }
 
@@ -120,6 +142,10 @@ final class AuthController extends Controller
         $groups = (array) ($userinfo['groups'] ?? []);
 
         if ($sub === '' || $email === '') {
+            Log::warning('marketplace.auth.callback.incomplete_userinfo', $this->authContext($request) + [
+                'sub_present' => $sub !== '',
+                'email_present' => $email !== '',
+            ]);
             return redirect('/')->with('error', 'Incomplete user info.');
         }
 
@@ -144,12 +170,23 @@ final class AuthController extends Controller
 
         AuditLog::record('login', $user->id, 'User', $user->id, null, $request->ip());
 
+        Log::info('marketplace.auth.callback.success', $this->authContext($request) + [
+            'user_id' => $user->id,
+            'role' => $user->role,
+            'auth_sub' => $sub,
+        ]);
+
         return redirect()->intended($role === 'admin' ? '/admin' : '/');
     }
 
     public function logout(Request $request): RedirectResponse
     {
         $user = $request->user();
+
+        Log::info('marketplace.auth.logout.start', $this->authContext($request) + [
+            'user_id' => $user?->id,
+            'role' => $user?->role,
+        ]);
 
         if ($user) {
             AuditLog::record('logout', $user->id, 'User', $user->id, null, $request->ip());
@@ -162,10 +199,24 @@ final class AuthController extends Controller
         $endSessionUrl = config('authentik-oidc.end_session_url');
 
         if (is_string($endSessionUrl) && $endSessionUrl !== '') {
+            Log::info('marketplace.auth.logout.redirect_end_session', $this->authContext($request));
             return redirect($endSessionUrl . '?' . http_build_query(['redirect_uri' => url('/')]));
         }
 
+        Log::info('marketplace.auth.logout.redirect_home', $this->authContext($request));
+
         return redirect('/');
+    }
+
+    private function authContext(Request $request): array
+    {
+        return [
+            'path' => $request->path(),
+            'method' => $request->method(),
+            'ip' => $request->ip(),
+            'request_id' => $request->header('X-Request-Id'),
+            'session_id' => $request->hasSession() ? $request->session()->getId() : null,
+        ];
     }
 
     private function resolveRole(array $groups): string
