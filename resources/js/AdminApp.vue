@@ -432,7 +432,13 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Auto-hospedado (sin dependencia de fonts.googleapis.com): evita un
+   origen externo en la CSP y una fuga de IP del visitante a Google en
+   cada carga de página. Ver package.json → @fontsource/inter. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
 
 :global(body) {
     margin: 0;

@@ -1049,7 +1049,17 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&display=swap');
+/* Auto-hospedado (sin dependencia de fonts.googleapis.com): evita un
+   origen externo en la CSP y una fuga de IP del visitante a Google en
+   cada carga de página. Ver package.json → @fontsource/manrope,
+   @fontsource/source-serif-4. */
+@import '@fontsource/manrope/400.css';
+@import '@fontsource/manrope/500.css';
+@import '@fontsource/manrope/600.css';
+@import '@fontsource/manrope/700.css';
+@import '@fontsource/manrope/800.css';
+@import '@fontsource/source-serif-4/500.css';
+@import '@fontsource/source-serif-4/700.css';
 
 :global(body) {
     margin: 0;
