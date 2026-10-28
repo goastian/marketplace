@@ -125,6 +125,8 @@ final class ApiV1CatalogAndAssetsTest extends TestCase
 
     public function test_authenticated_asset_management_flow_works(): void
     {
+        Storage::fake('local');
+
         [$jwt, $jwksUri] = $this->fakeAuthentik();
 
         $created = $this
@@ -169,12 +171,19 @@ final class ApiV1CatalogAndAssetsTest extends TestCase
             ->assertJsonPath('data.version', '1.0.0')
             ->assertJsonPath('data.status', 'published');
 
+        // El file_path referenciado (sin "file" adjunto en esta petición) debe
+        // existir de antemano en el disco: simula una subida previa directa
+        // a storage (p. ej. vía URL firmada), no una ruta inventada por el
+        // cliente apuntando a lo que sea.
+        $versionFilePath = 'assets/'.$assetId.'/versions/1.0.1.zip';
+        Storage::disk('local')->put($versionFilePath, 'binary-content-v2');
+
         $versionWithJsonManifest = $this
             ->withHeader('Authorization', 'Bearer '.$jwt)
             ->post('/api/v1/me/assets/'.$assetId.'/versions', [
                 'version' => '1.0.1',
                 'manifest' => json_encode(['name' => 'Mint Theme', 'entry' => 'index-v2.json']),
-                'file_path' => 'assets/'.$assetId.'/versions/1.0.1.zip',
+                'file_path' => $versionFilePath,
             ]);
 
         $versionWithJsonManifest

@@ -12,7 +12,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+        // Solo el grupo "web" (páginas HTML de Inertia/Blade): el vhost de
+        // nginx en el borde (container/nginx-reverse.conf) ya pone las
+        // mismas cabeceras para TODAS las respuestas, incluida /up y
+        // /api/*. Aplicar esto también de forma global las duplicaba
+        // (dos X-Frame-Options, dos CSP con connect-src distinto).
+        $middleware->web(append: [
+            \App\Http\Middleware\SecurityHeaders::class,
+        ]);
 
         $middleware->alias([
             'authentik.jwt' => \App\Http\Middleware\AuthentikJwt::class,
