@@ -7,7 +7,7 @@
         "dev": "vite"
     },
     "devDependencies": {
-        "@intlify/unplugin-vue-i18n": "^11.2.8",
+        "@intlify/bundle-utils": "^11.2.8",
         "@tailwindcss/vite": "^4.0.0",
         "@vitejs/plugin-vue": "^6.0.1",
         "axios": "^1.11.0",

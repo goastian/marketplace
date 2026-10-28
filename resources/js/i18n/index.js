@@ -1,6 +1,10 @@
 import { createI18n } from 'vue-i18n';
-import en from './locales/en.json';
-import es from './locales/es.json';
+// La query "?i18n-precompile" la intercepta vite.config.js (plugin
+// precompileI18nLocales): compila estos JSON a funciones en build time,
+// para poder usar vue-i18n.runtime.esm-bundler.js (sin compilador JIT
+// basado en `new Function`, bloqueado por la CSP) — ver vite.config.js.
+import en from './locales/en.json?i18n-precompile';
+import es from './locales/es.json?i18n-precompile';
 
 function detectLocale() {
     // Check URL path prefix.
