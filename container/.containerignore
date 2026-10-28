@@ -1,0 +1,63 @@
+# Midori Marketplace — .containerignore (equivalente al .dockerignore de docker).
+
+# Carpeta de despliegue: nunca dentro de la imagen, salvo container/config/
+# (el containerfile la copia explícitamente).
+container/*
+!container/config/
+!container/config/**
+
+# Control de versiones y herramientas
+.git
+.github
+.gitignore
+.gitattributes
+.editorconfig
+.idea
+.vscode
+.zed
+.fleet
+.nova
+
+# Configuración y secretos: nunca dentro de la imagen
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.secret
+
+# Backups, volcados y artefactos de auditoría
+.backup
+*.dump
+*.dump.part
+*.sql
+*.tar
+*.tar.gz
+*.tar.gz.part
+backup.log
+artifacts/
+
+# Artefactos del proyecto que no se copian a la imagen
+Dockerfile
+docker-compose.yml
+docker/
+docs/
+tests/
+phpunit.xml
+README.md
+CHANGELOG.md
+SECURITY.md
+
+# Dependencias y artefactos regenerables en build
+node_modules
+vendor
+public/build
+public/hot
+public/storage
+
+# Base sqlite de desarrollo (producción usa pgsql contra arca)
+database/database.sqlite
+
+# Almacenamiento y caché (se crean en build y se montan en runtime)
+storage/**
+bootstrap/cache/**
