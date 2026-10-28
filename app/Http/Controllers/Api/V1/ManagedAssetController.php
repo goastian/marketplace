@@ -211,7 +211,9 @@ final class ManagedAssetController extends Controller
             'manifest' => ['required', 'array'],
             'file' => ['nullable', 'file', 'max:51200'],
             'file_path' => ['nullable', 'string', 'max:1024'],
-            'file_disk' => ['nullable', 'string', 'max:64'],
+            // Allowlist explícito: nunca un disco arbitrario (p. ej. uno de
+            // configuración interna no pensado para subidas de usuario).
+            'file_disk' => ['nullable', 'string', 'in:local,public'],
             'checksum' => ['nullable', 'string', 'max:128'],
         ]);
 
@@ -282,8 +284,23 @@ final class ManagedAssetController extends Controller
         }
 
         $filePath = $validated['file_path'];
+
+        // El cliente nunca debe poder registrar una ruta fuera del propio
+        // prefijo del asset: sin esto, cualquier developer podía apuntar
+        // una versión propia a un archivo ya existente de OTRO asset/usuario
+        // en el mismo disco (IDOR vía ruta adivinada o conocida), sin haber
+        // subido nada él mismo.
+        $expectedPrefix = 'assets/'.$asset->id.'/versions/';
+        if (! str_starts_with($filePath, $expectedPrefix) || str_contains($filePath, '..')) {
+            abort(422, 'file_path must reference a file already uploaded for this asset.');
+        }
+
+        if (! $disk->exists($filePath)) {
+            abort(422, 'file_path does not exist on the given disk.');
+        }
+
         $checksum = $validated['checksum'] ?? null;
-        $sizeBytes = $disk->exists($filePath) ? $disk->size($filePath) : null;
+        $sizeBytes = $disk->size($filePath);
 
         return [$filePath, $checksum, $sizeBytes];
     }
